@@ -1,10 +1,15 @@
 use rdev::{listen, Event, EventType};
-use evdev::{Device, InputEventKind};
-use glob::glob;
 use std::io::{self, Write};
 use serde::Serialize;
 use std::sync::mpsc;
 use std::thread;
+
+// Linux 特定的导入
+#[cfg(target_os = "linux")]
+use evdev::{Device, InputEventKind};
+#[cfg(target_os = "linux")]
+use glob::glob;
+#[cfg(target_os = "linux")]
 use tokio_stream::StreamExt;
 
 // 定义一个我们自己的事件结构体，这样更容易通过 JSON 传递
@@ -37,7 +42,8 @@ fn rdev_callback(event: Event, tx: &mpsc::Sender<BongoEvent>) {
     }
 }
 
-// evdev 事件处理函数
+// evdev 事件处理函数 (仅 Linux)
+#[cfg(target_os = "linux")]
 async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>) -> Result<(), Box<dyn std::error::Error>> {
     let device = Device::open(device_path)?;
     println!("Listening for keyboard events on '{}' with evdev. Press Ctrl+C to exit.", device.name().unwrap_or("Unknown Device"));
@@ -67,7 +73,8 @@ async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>) -
     Ok(())
 }
 
-// 扫描并列出可用的输入设备
+// 扫描并列出可用的输入设备 (仅 Linux)
+#[cfg(target_os = "linux")]
 fn scan_input_devices() -> Result<Vec<(String, std::path::PathBuf)>, Box<dyn std::error::Error>> {
     let mut devices = Vec::new();
     for entry in glob("/dev/input/event*")? {
@@ -85,62 +92,58 @@ fn scan_input_devices() -> Result<Vec<(String, std::path::PathBuf)>, Box<dyn std
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- TTY Bongo Cat Core ---");
-    println!("Choose input method:");
-    println!("1. Use rdev (cross-platform, works on most systems)");
-    println!("2. Use evdev (Linux only, more direct device access)");
-    
-    let mut choice = String::new();
-    io::stdin().read_line(&mut choice)?;
-    let choice = choice.trim();
     
     let (tx, rx) = mpsc::channel::<BongoEvent>();
     
-    match choice {
-        "1" => {
-            println!("Using rdev for input detection...");
-            
-            // 在新线程中运行 rdev 监听
-            let tx_clone = tx.clone();
-            thread::spawn(move || {
-                if let Err(error) = listen(move |event| rdev_callback(event, &tx_clone)) {
-                    eprintln!("Error with rdev: {:?}", error);
-                }
-            });
-        }
-        "2" => {
-            println!("Scanning for input devices...");
-            let devices = scan_input_devices()?;
-            
-            if devices.is_empty() {
-                eprintln!("No input devices found. Do you have the correct permissions?");
-                eprintln!("Try running: sudo usermod -aG input $USER (and then log out and back in)");
-                return Ok(());
+    #[cfg(target_os = "linux")]
+    {
+        println!("Choose input method:");
+        println!("1. Use rdev (cross-platform, works on most systems)");
+        println!("2. Use evdev (Linux only, more direct device access)");
+        
+        let mut choice = String::new();
+        io::stdin().read_line(&mut choice)?;
+        let choice = choice.trim();
+        
+        match choice {
+            "1" => {
+                println!("Using rdev for input detection...");
+                start_rdev_listener(tx);
             }
+            "2" => {
+                println!("Scanning for input devices...");
+                let devices = scan_input_devices()?;
+                
+                if devices.is_empty() {
+                    eprintln!("No input devices found. Do you have the correct permissions?");
+                    eprintln!("Try running: sudo usermod -aG input $USER (and then log out and back in)");
+                    return Ok(());
+                }
 
-            println!("\nPlease enter the full path of the device you want to listen to (e.g., /dev/input/event3):");
-            let mut input_path = String::new();
-            io::stdin().read_line(&mut input_path)?;
-            let device_path = input_path.trim().to_string();
-            
-            // 在新任务中运行 evdev 监听
-            let tx_clone = tx.clone();
-            tokio::spawn(async move {
-                if let Err(e) = handle_evdev_device(&device_path, &tx_clone).await {
-                    eprintln!("Error with evdev: {}", e);
-                }
-            });
+                println!("\nPlease enter the full path of the device you want to listen to (e.g., /dev/input/event3):");
+                let mut input_path = String::new();
+                io::stdin().read_line(&mut input_path)?;
+                let device_path = input_path.trim().to_string();
+                
+                // 在新任务中运行 evdev 监听
+                let tx_clone = tx.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_evdev_device(&device_path, &tx_clone).await {
+                        eprintln!("Error with evdev: {}", e);
+                    }
+                });
+            }
+            _ => {
+                println!("Invalid choice. Using rdev as default.");
+                start_rdev_listener(tx);
+            }
         }
-        _ => {
-            println!("Invalid choice. Using rdev as default.");
-            
-            // 在新线程中运行 rdev 监听
-            let tx_clone = tx.clone();
-            thread::spawn(move || {
-                if let Err(error) = listen(move |event| rdev_callback(event, &tx_clone)) {
-                    eprintln!("Error with rdev: {:?}", error);
-                }
-            });
-        }
+    }
+    
+    #[cfg(not(target_os = "linux"))]
+    {
+        println!("Using rdev for input detection (only option available on this platform)...");
+        start_rdev_listener(tx);
     }
     
     println!("Bongo Cat Core started. Listening for events...");
@@ -157,4 +160,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+// 启动 rdev 监听器的辅助函数
+fn start_rdev_listener(tx: mpsc::Sender<BongoEvent>) {
+    // 在新线程中运行 rdev 监听
+    let tx_clone = tx.clone();
+    thread::spawn(move || {
+        if let Err(error) = listen(move |event| rdev_callback(event, &tx_clone)) {
+            eprintln!("Error with rdev: {:?}", error);
+        }
+    });
 }
