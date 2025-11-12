@@ -96,24 +96,37 @@ lsinput
 
 ## 多平台构建
 
-### 推荐方案：本地构建 + 手动发布
+### 推荐方案：本地构建脚本
 
-由于交叉编译的复杂性，推荐使用以下简单方案：
+项目提供了智能构建脚本，自动检测平台并生成正确的二进制文件：
 
-#### 1. 本地构建当前平台
 ```bash
-# 构建当前平台（快速且可靠）
+# 使用构建脚本（推荐）
+./build-local.sh
+```
+
+构建脚本会：
+- ✅ 自动检测当前平台（Linux/macOS/Windows）
+- ✅ 自动检测架构（x86_64/ARM64）
+- ✅ 生成正确命名的二进制文件到 `dist/` 目录
+- ✅ 设置可执行权限
+
+#### 输出文件命名规则：
+- `bongo-cat-core-linux-x86_64` - Linux x86_64
+- `bongo-cat-core-linux-arm64` - Linux ARM64
+- `bongo-cat-core-windows-x86_64.exe` - Windows x86_64
+- `bongo-cat-core-macos-x86_64` - macOS x86_64 (Intel)
+- `bongo-cat-core-macos-arm64` - macOS ARM64 (Apple Silicon)
+
+#### 手动构建（可选）
+```bash
+# 直接构建当前平台
 cargo build --release
 ```
 
-#### 2. 在对应系统上构建其他平台
-- **Windows**: 在 Windows 机器上运行 `cargo build --release`
-- **macOS**: 在 macOS 机器上运行 `cargo build --release`
-- **Linux ARM64**: 在 ARM64 Linux 机器上运行 `cargo build --release`
-
-#### 3. 使用 Docker（可选）
+#### Docker 构建（可选）
 ```bash
-# 使用官方 Rust 镜像
+# 使用官方 Rust 震像
 docker run --rm -v $(pwd):/app -w /app rust:latest cargo build --release
 ```
 
