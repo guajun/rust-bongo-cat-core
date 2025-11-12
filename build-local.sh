@@ -36,7 +36,7 @@ elif [ "$CURRENT_OS" = "Linux" ]; then
         cp target/release/bongo-cat-core dist/bongo-cat-core-linux-arm64
         echo "✓ Built: dist/bongo-cat-core-linux-arm64"
     fi
-elif [ "$CURRENT_OS" = "MINGW64_NT-10.0-19042" ] || [ "$CURRENT_OS" = "MSYS_NT-10.0-19042" ] || [ "$CURRENT_OS" = "CYGWIN_NT-10.0-19042" ]; then
+elif [[ "$CURRENT_OS" == MINGW* ]] || [[ "$CURRENT_OS" == MSYS* ]] || [[ "$CURRENT_OS" == CYGWIN* ]] || [[ "$CURRENT_OS" == *"NT"* ]]; then
     # Windows (Git Bash, MSYS2, etc.)
     cp target/release/bongo-cat-core.exe dist/bongo-cat-core-windows-x86_64.exe
     echo "✓ Built: dist/bongo-cat-core-windows-x86_64.exe"

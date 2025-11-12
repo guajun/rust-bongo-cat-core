@@ -100,9 +100,16 @@ lsinput
 
 项目提供了智能构建脚本，自动检测平台并生成正确的二进制文件：
 
+**Linux/macOS 系统：**
 ```bash
 # 使用构建脚本（推荐）
 ./build-local.sh
+```
+
+**Windows 系统：**
+```cmd
+# 使用Windows批处理脚本（推荐）
+build-local.bat
 ```
 
 构建脚本会：
