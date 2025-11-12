@@ -96,36 +96,38 @@ lsinput
 
 ## 多平台构建
 
-### 方法一：使用 GitHub Actions（推荐）
+### 推荐方案：本地构建 + 手动发布
 
-项目配置了 GitHub Actions，可以自动构建所有平台的二进制文件：
+由于交叉编译的复杂性，推荐使用以下简单方案：
 
-1. **推送代码到 GitHub**：自动触发构建
-2. **创建发布标签**：自动创建 GitHub Release 并上传所有二进制文件
-
+#### 1. 本地构建当前平台
 ```bash
-# 创建发布标签（会触发完整构建和发布）
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-构建完成后，在 GitHub Releases 页面可以下载所有平台的二进制文件：
-- `bongo-cat-core-linux-x86_64` - Linux x86_64
-- `bongo-cat-core-linux-arm64` - Linux ARM64
-- `bongo-cat-core-windows-x86_64.exe` - Windows x86_64
-- `bongo-cat-core-macos-x86_64` - macOS x86_64 (Intel)
-- `bongo-cat-core-macos-arm64` - macOS ARM64 (Apple Silicon)
-
-### 方法二：本地构建
-
-项目也支持本地构建，但仅限当前平台：
-
-```bash
-# 构建当前平台
+# 构建当前平台（快速且可靠）
 cargo build --release
 ```
 
-**注意**：本地构建仅支持当前平台，完整的多平台构建请使用 GitHub Actions。
+#### 2. 在对应系统上构建其他平台
+- **Windows**: 在 Windows 机器上运行 `cargo build --release`
+- **macOS**: 在 macOS 机器上运行 `cargo build --release`
+- **Linux ARM64**: 在 ARM64 Linux 机器上运行 `cargo build --release`
+
+#### 3. 使用 Docker（可选）
+```bash
+# 使用官方 Rust 镜像
+docker run --rm -v $(pwd):/app -w /app rust:latest cargo build --release
+```
+
+### GitHub Actions：代码质量检查
+
+项目配置了 GitHub Actions 专注于代码质量检查：
+
+- ✅ 代码格式检查（`cargo fmt`）
+- ✅ 代码质量检查（`cargo clippy`）
+- ✅ 构建测试
+- ✅ 单元测试
+- ✅ 跨平台兼容性验证
+
+推送代码时会自动运行这些检查，确保代码质量。
 
 ### 验证构建产物
 
