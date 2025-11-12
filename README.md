@@ -14,5 +14,5 @@ cargo run -- rdev
 ### 使用 evdev 模式（仅 Linux Wayland）
 假设键盘设备为 `/dev/input/event3`，鼠标设备为 `/dev/input/event4`
 ```bash
-sudo ./target/release/rust-bongo-cat-core -- evdev --keyboard /dev/input/event3 --mouse /dev/input/event4
+sudo ./target/release/bongo-cat-core -- evdev --keyboard /dev/input/event3 --mouse /dev/input/event4
 ```
