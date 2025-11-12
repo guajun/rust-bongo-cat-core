@@ -137,17 +137,25 @@ cargo build --release
 docker run --rm -v $(pwd):/app -w /app rust:latest cargo build --release
 ```
 
-### GitHub Actions：代码质量检查
+### 代码质量检查
 
-项目配置了 GitHub Actions 专注于代码质量检查：
+项目支持本地代码质量检查：
 
-- ✅ 代码格式检查（`cargo fmt`）
-- ✅ 代码质量检查（`cargo clippy`）
-- ✅ 构建测试
-- ✅ 单元测试
-- ✅ 跨平台兼容性验证
+```bash
+# 代码格式化
+cargo fmt
 
-推送代码时会自动运行这些检查，确保代码质量。
+# 代码质量检查
+cargo clippy --all-targets --all-features -- -D warnings
+
+# 运行测试
+cargo test
+
+# 构建检查
+cargo build --release
+```
+
+建议在提交代码前运行这些检查，确保代码质量。
 
 ### 验证构建产物
 
