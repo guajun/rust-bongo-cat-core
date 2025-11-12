@@ -1,14 +1,14 @@
-use rdev::{listen, Event, EventType};
-use std::io::{self, Write};
+use rdev::{Event, EventType, listen};
 use serde::Serialize;
+use std::io::{self, Write};
 use std::sync::mpsc;
 use std::thread;
 
 // Linux 特定的导入
 #[cfg(target_os = "linux")]
-use evdev::{Device, InputEventKind};
-#[cfg(target_os = "linux")]
 use clap::{Parser, Subcommand};
+#[cfg(target_os = "linux")]
+use evdev::{Device, InputEventKind};
 #[cfg(target_os = "linux")]
 use futures_util::stream::StreamExt;
 
@@ -70,10 +70,18 @@ fn rdev_callback(event: Event, tx: &mpsc::Sender<BongoEvent>) {
 
 // evdev 事件处理函数 (仅 Linux)
 #[cfg(target_os = "linux")]
-async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>, device_type: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn handle_evdev_device(
+    device_path: &str,
+    tx: &mpsc::Sender<BongoEvent>,
+    device_type: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let device = Device::open(device_path)?;
-    println!("Listening for {} events on '{}' with evdev. Press Ctrl+C to exit.", device_type, device.name().unwrap_or("Unknown Device"));
-    
+    println!(
+        "Listening for {} events on '{}' with evdev. Press Ctrl+C to exit.",
+        device_type,
+        device.name().unwrap_or("Unknown Device")
+    );
+
     let mut stream = device.into_event_stream()?;
 
     while let Some(Ok(event)) = stream.next().await {
@@ -81,7 +89,8 @@ async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>, d
             "keyboard" => {
                 if let InputEventKind::Key(_) = event.kind() {
                     match event.value() {
-                        1 => { // Press
+                        1 => {
+                            // Press
                             let bongo_event = BongoEvent {
                                 event_type: "key_down".to_string(),
                                 key: format!("{:?}", event.code()),
@@ -100,7 +109,8 @@ async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>, d
             "mouse" => {
                 if let InputEventKind::Key(_) = event.kind() {
                     match event.value() {
-                        1 => { // Press
+                        1 => {
+                            // Press
                             let bongo_event = BongoEvent {
                                 event_type: "mouse_down".to_string(),
                                 key: format!("{:?}", event.code()),
@@ -126,14 +136,14 @@ async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>, d
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("--- TTY Bongo Cat Core ---");
-    
+
     let (tx, rx) = mpsc::channel::<BongoEvent>();
-    
+
     #[cfg(target_os = "linux")]
     {
         // Linux 系统：解析命令行参数
         let cli = Cli::parse();
-        
+
         match cli.command {
             Commands::Rdev => {
                 println!("Using rdev for input detection...");
@@ -141,16 +151,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Commands::Evdev { keyboard, mouse } => {
                 println!("Using evdev for input detection...");
-                
+
                 // 启动键盘监听
                 let tx_clone = tx.clone();
                 let keyboard_path = keyboard.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_evdev_device(&keyboard_path, &tx_clone, "keyboard").await {
+                    if let Err(e) = handle_evdev_device(&keyboard_path, &tx_clone, "keyboard").await
+                    {
                         eprintln!("Error with keyboard evdev: {}", e);
                     }
                 });
-                
+
                 // 启动鼠标监听
                 let tx_clone = tx.clone();
                 let mouse_path = mouse.clone();
@@ -162,17 +173,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    
+
     #[cfg(not(target_os = "linux"))]
     {
         // 非 Linux 系统：直接使用 rdev，无需命令行参数
         println!("Using rdev for input detection (only option available on this platform)...");
         start_rdev_listener(tx);
     }
-    
+
     println!("Bongo Cat Core started. Listening for events...");
     io::stdout().flush().unwrap();
-    
+
     // 主线程负责接收事件并发送 JSON 输出
     while let Ok(event) = rx.recv() {
         if let Ok(json) = serde_json::to_string(&event) {
