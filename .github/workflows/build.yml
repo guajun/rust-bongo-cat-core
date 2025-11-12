@@ -1,0 +1,135 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }} (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: bongo-cat-core-linux-x86_64
+            artifact_name: bongo-cat-core-linux-x86_64
+            
+          # Linux ARM64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary_name: bongo-cat-core-linux-arm64
+            artifact_name: bongo-cat-core-linux-arm64
+            
+          # Windows x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            binary_name: bongo-cat-core.exe
+            artifact_name: bongo-cat-core-windows-x86_64.exe
+            
+          # macOS x86_64 (Intel)
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary_name: bongo-cat-core
+            artifact_name: bongo-cat-core-macos-x86_64
+            
+          # macOS ARM64 (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: bongo-cat-core
+            artifact_name: bongo-cat-core-macos-arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install cross-compilation tools (Linux ARM64)
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build binary
+      run: |
+        cargo build --release --target ${{ matrix.target }}
+
+    - name: Prepare artifacts
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} artifacts/${{ matrix.artifact_name }}
+        else
+          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} artifacts/${{ matrix.artifact_name }}
+        fi
+        
+        # Make binaries executable (except Windows)
+        if [ "${{ matrix.os }}" != "windows-latest" ]; then
+          chmod +x artifacts/${{ matrix.artifact_name }}
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: artifacts/${{ matrix.artifact_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/bongo-cat-core-linux-x86_64
+          artifacts/bongo-cat-core-linux-arm64
+          artifacts/bongo-cat-core-windows-x86_64.exe
+          artifacts/bongo-cat-core-macos-x86_64
+          artifacts/bongo-cat-core-macos-arm64
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

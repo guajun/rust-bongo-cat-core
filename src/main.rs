@@ -3,13 +3,14 @@ use std::io::{self, Write};
 use serde::Serialize;
 use std::sync::mpsc;
 use std::thread;
-use clap::{Parser, Subcommand};
 
 // Linux 特定的导入
 #[cfg(target_os = "linux")]
 use evdev::{Device, InputEventKind};
 #[cfg(target_os = "linux")]
-use tokio_stream::StreamExt;
+use clap::{Parser, Subcommand};
+#[cfg(target_os = "linux")]
+use futures_util::stream::StreamExt;
 
 // 定义一个我们自己的事件结构体，这样更容易通过 JSON 传递
 #[derive(Serialize)]
@@ -19,7 +20,8 @@ struct BongoEvent {
     key: String,
 }
 
-// 命令行参数结构
+// Linux 系统的命令行参数结构
+#[cfg(target_os = "linux")]
 #[derive(Parser)]
 #[command(name = "bongo-cat-core")]
 #[command(about = "A core program for bongo cat that captures keyboard and mouse events")]
@@ -28,11 +30,12 @@ struct Cli {
     command: Commands,
 }
 
+#[cfg(target_os = "linux")]
 #[derive(Subcommand)]
 enum Commands {
-    /// Use rdev for Win, Mac, Linux (x11) input detection
+    /// Use rdev for cross-platform input detection
     Rdev,
-    /// Use evdev for Linux (Wayland) direct device access
+    /// Use evdev for Linux direct device access
     Evdev {
         /// Keyboard device path (e.g., /dev/input/event3)
         #[arg(short, long)]
@@ -120,23 +123,23 @@ async fn handle_evdev_device(device_path: &str, tx: &mpsc::Sender<BongoEvent>, d
     Ok(())
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
-    
     println!("--- TTY Bongo Cat Core ---");
     
     let (tx, rx) = mpsc::channel::<BongoEvent>();
     
-    match cli.command {
-        Commands::Rdev => {
-            println!("Using rdev for input detection...");
-            start_rdev_listener(tx);
-        }
-        Commands::Evdev { keyboard, mouse } => {
-            #[cfg(target_os = "linux")]
-            {
+    #[cfg(target_os = "linux")]
+    {
+        // Linux 系统：解析命令行参数
+        let cli = Cli::parse();
+        
+        match cli.command {
+            Commands::Rdev => {
+                println!("Using rdev for input detection...");
+                start_rdev_listener(tx);
+            }
+            Commands::Evdev { keyboard, mouse } => {
                 println!("Using evdev for input detection...");
                 
                 // 启动键盘监听
@@ -157,13 +160,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 });
             }
-            
-            #[cfg(not(target_os = "linux"))]
-            {
-                eprintln!("Error: evdev is only supported on Linux. Use 'rdev' command instead.");
-                return Ok(());
-            }
         }
+    }
+    
+    #[cfg(not(target_os = "linux"))]
+    {
+        // 非 Linux 系统：直接使用 rdev，无需命令行参数
+        println!("Using rdev for input detection (only option available on this platform)...");
+        start_rdev_listener(tx);
     }
     
     println!("Bongo Cat Core started. Listening for events...");

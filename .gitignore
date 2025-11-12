@@ -1,1 +1,16 @@
 /target
+/dist
+
+# Rust
+Cargo.lock
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
