@@ -30,9 +30,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Use rdev for cross-platform input detection
+    /// Use rdev for Win, Mac, Linux (x11) input detection
     Rdev,
-    /// Use evdev for Linux direct device access
+    /// Use evdev for Linux (Wayland) direct device access
     Evdev {
         /// Keyboard device path (e.g., /dev/input/event3)
         #[arg(short, long)]
